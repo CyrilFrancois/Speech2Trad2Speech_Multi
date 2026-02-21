@@ -1,7 +1,7 @@
-# Speech2Translate | AI Multilingual Showcase
+# Speech2Translate | AI Multilingual Bridge (v2.8 Sync)
 
 ### **What is this project?**
-Speech2Translate is a high-performance translation bridge designed for real-time customer service environments. This repository serves as a **Technical Showcase** of a "Cascaded" AI pipeline, demonstrating that high-accuracy, private translation is achievable through localized models.
+Speech2Translate is a high-performance translation bridge designed for real-time customer service environments. This repository serves as a **Technical Showcase** of a "Cascaded" AI pipeline, demonstrating that high-accuracy, private translation is achievable through localized models with real-time multi-device synchronization.
 
 <p align="center">
   <img src="frontend/rsc/screenshot.png" alt="Speech2Translate UI Screenshot" width="800">
@@ -10,39 +10,41 @@ Speech2Translate is a high-performance translation bridge designed for real-time
 ---
 
 ## Showcase Scope & Experience
-This prototype demonstrates a modular, containerized microservices architecture capable of handling the core linguistic challenges of international customer support:
+This prototype demonstrates a modular, containerized microservices architecture capable of handling the core linguistic challenges of international customer support through a unique **Sequential-Sync** approach:
 
-1.  **Acoustic Intelligence:** Leveraging **Faster-Whisper** to achieve near-human transcription accuracy even in low-bandwidth or noisy conditions.
-2.  **Linguistic Fluidity:** Implementing **M2M100**, a "Many-to-Many" multilingual model that allows direct translation across 100+ languages without an English-pivot bias.
-3.  **Voice-First UX:** A custom frontend utilizing the **Web MediaRecorder API** to capture, process, and display translations with sub-second backend response times.
+1.  **Phase 1: Acoustic Intelligence (Faster-Whisper):** Near-human transcription accuracy. The system broadcasts "Partial Text" to all connected clients immediately after the audio is processed, providing instant visual feedback.
+2.  **Phase 2: Linguistic Fluidity (M2M100):** A "Many-to-Many" multilingual model that translates directly between languages without English-pivot bias.
+3.  **Phase 3: Neural Synchronization:** A state-managed backend that ensures "Three-Dot" typing indicators and processing status are synchronized across all instances (Customer, Advisor, and Main Hub) via high-frequency polling.
+
+---
+
+## Technical Innovation: Sequential Sync
+Unlike standard translation apps that wait for the entire process to finish before showing anything, this version splits the pipeline:
+* **Decoupled Processing:** Transcription and Translation are separate calls.
+* **Non-Blocking Backend:** Uses threaded standard Python definitions in FastAPI to ensure the `/history` sync endpoint remains responsive while the GPU is under load.
+* **Dual-State UI:** Displays the original transcription in a "pending" state before the translation arrives, significantly improving perceived latency.
 
 ---
 
 ## Project Architecture
 The system is orchestrated via Docker to ensure environment parity between development and production.
 
-### **File Structure Description**
-* **`README.md`**
-* **`.env`**
-* **`docker-compose.yml`**
-* **`/backend`**
-    * `main.py`
-    * `requirements.txt`
-    * `Dockerfile`
-* **`/frontend`**
-    * `index.html`
-    * `script.js`
-    * `Dockerfile`
-* **`/rsc`**
-    * `screenshot.png`
-    * `background.png`
+### **File Structure**
+* **`main.py`** (FastAPI): Threaded handlers for Transcription and Translation; global state management for sync.
+* **`index.html`** (Tailwind CSS): Responsive UI with integrated neural processing indicators and real-time debug console.
+* **`script.js`** (Vanilla JS): Sequential fetch logic and Web MediaRecorder implementation.
+* **`conversation_history.json`** (Persistence): JSON-based store for cross-session continuity.
 
 ---
 
 ## Getting Started
 1.  **Environment Setup:** Ensure your `.env` is configured for your local hardware (CPU/GPU).
-2.  **Deployment:** `docker-compose up --build`
-3.  **Demonstration:** Access the local dashboard at `http://localhost/index.html`.
+2.  **Deployment:** ```bash
+    docker-compose up --build
+    ```
+3.  **Access Points:**
+    * **Main Hub:** `http://localhost/index.html` (Desktop/Manager view)
+    * **Customer View:** `http://localhost/index.html?role=customer` (EN Input)
+    * **Advisor View:** `http://localhost/index.html?role=advisor` (FR Input)
 
-Customer : http://localhost/?role=customer
-Advisor : http://localhost/?role=advisor
+4.  **Monitoring:** Click the **"View Logs"** button in the footer to watch the Phase 1/Phase 2 handshake in real-time.

@@ -53,7 +53,7 @@
             const logEl = document.getElementById('debug-log');
             if (!logEl) return;
             const time = new Date().toLocaleTimeString('en-GB', { hour12: false });
-            let color = '#10b981'; // Default Green (INFO)
+            let color = '#10b981';
             if (type === 'ERROR') color = '#f87171';
             if (type === 'WARN') color = '#fbbf24';
             if (type === 'SUCCESS') color = '#34d399';

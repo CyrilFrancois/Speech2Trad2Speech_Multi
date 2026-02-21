@@ -120,7 +120,6 @@ async function processInput(data, isAudio) {
         
         window.logToUI(`Translated successfully.`, "SUCCESS");
         
-        // Final sync call to clean up dots and show message immediately
         syncHistory();
 
     } catch (err) {
@@ -136,12 +135,10 @@ async function syncHistory() {
         const res = await fetch(`${API_BASE}/history`);
         const data = await res.json();
         
-        // DEBUG: Logging backend state to the UI console
         if (data.is_processing) {
             console.log(`Sync Polling: Processing active for ${data.active_sender}`);
         }
 
-        // Global Sync of dots and text labels
         toggleGlobalLoading(data.is_processing, data.active_sender, data.partial_text);
 
         ui.statusDot.style.backgroundColor = "#10b981";
@@ -150,7 +147,6 @@ async function syncHistory() {
         const history = data.history || [];
         if (history.length > 0) document.getElementById('empty-state')?.remove();
 
-        // Remote Clear
         if (history.length === 0 && knownMessageIds.size > 0) {
             ui.messagesContainer.innerHTML = '';
             knownMessageIds.clear();
@@ -254,7 +250,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const ui = getElems();
     
     syncHistory();
-    setInterval(syncHistory, 800); // Slightly faster polling for tighter sync
+    setInterval(syncHistory, 800);
 
     if (ui.recordBtn) ui.recordBtn.onclick = handleRecordClick;
     

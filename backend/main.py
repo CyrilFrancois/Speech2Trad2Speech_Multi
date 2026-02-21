@@ -32,7 +32,6 @@ HISTORY_FILE = "conversation_history.json"
 UPLOAD_DIR = "temp_audio"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# Global status for real-time synchronization across all tabs
 app.state.is_processing = False
 app.state.active_sender = None
 app.state.partial_text = ""
@@ -93,7 +92,6 @@ def handle_transcription(file: UploadFile = File(...), sender: str = Form(...)):
         segments_gen, info = stt_model.transcribe(file_path, beam_size=5)
         transcription = " ".join([s.text for s in list(segments_gen)]).strip()
         
-        # Update state so other tabs see what was said immediately
         app.state.partial_text = transcription
         logger.info(f"DONE TRANSCRIPTION: '{transcription}' (Lang: {info.language})")
         
@@ -113,10 +111,9 @@ def handle_translation(
     sender: str = Form(...)
 ):
     """PHASE 2: Text to Translation & Final Save"""
-    # Ensure dots stay visible during this second call
     app.state.is_processing = True 
     app.state.active_sender = sender
-    app.state.partial_text = text # Keep the original text visible
+    app.state.partial_text = text 
     
     logger.info(f"--- START TRANSLATION for {sender} ---")
     
@@ -142,7 +139,6 @@ def handle_translation(
         logger.error(f"TRANSLATION_ERROR: {e}")
         return {"error": str(e)}
     finally:
-        # Crucial: Reset global state so dots disappear on all pages
         app.state.is_processing = False
         app.state.active_sender = None
         app.state.partial_text = ""
