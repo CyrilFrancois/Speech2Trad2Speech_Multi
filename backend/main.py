@@ -32,9 +32,10 @@ HISTORY_FILE = "conversation_history.json"
 UPLOAD_DIR = "temp_audio"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# Global status to sync the "Three Dots" across all interface windows
+# Global status for real-time synchronization across all tabs
 app.state.is_processing = False
 app.state.current_sender = None
+app.state.current_transcription = ""  # New: holds text while translation is pending
 
 def load_history() -> List[Dict]:
     if os.path.exists(HISTORY_FILE):
@@ -59,10 +60,7 @@ compute_type = "float16" if device == "cuda" else "int8"
 
 logger.info(f"SYSTEM: Loading Models on {device} ({compute_type})...")
 
-# STT Model (Whisper)
 stt_model = WhisperModel("small", device=device, compute_type=compute_type)
-
-# Translation Model (M2M100)
 model_name = "facebook/m2m100_418M"
 tokenizer = M2M100Tokenizer.from_pretrained(model_name)
 translation_model = M2M100ForConditionalGeneration.from_pretrained(model_name).to(device)
@@ -87,17 +85,18 @@ async def process_translation(
     target_lang: str = Form(...),
     sender: str = Form(...)
 ):
-    # 1. Set global processing state IMMEDIATELY
+    # Start Global Processing State
     app.state.is_processing = True
     app.state.current_sender = sender
+    app.state.current_transcription = "" 
     
-    logger.info(f"TRANSLATION_REQ: From {sender} to {target_lang}")
-    
-    transcription = ""
-    src_lang = "en" if sender == "customer" else "fr"
+    logger.info(f"TRANSLATION_REQ: From {sender}")
 
     try:
-        # Audio Processing
+        # STEP 1: Transcription (Whisper)
+        transcription = ""
+        src_lang = "en" if sender == "customer" else "fr"
+
         if file:
             file_path = os.path.join(UPLOAD_DIR, f"{uuid.uuid4()}.wav")
             with open(file_path, "wb") as buffer:
@@ -106,23 +105,26 @@ async def process_translation(
             segments_gen, info = stt_model.transcribe(file_path, beam_size=5)
             transcription = " ".join([s.text for s in list(segments_gen)]).strip()
             
-            # Detect source language if confidence is high
             if info.language_probability > 0.8:
                 src_lang = info.language
             
             if os.path.exists(file_path): 
                 os.remove(file_path)
-        
-        # Text Processing
         elif text:
             transcription = text.strip()
 
         if not transcription:
             return {"error": "No input detected"}
 
-        # Perform Translation
+        # STEP 2: Update State with Transcription
+        # This allows the frontend to show the "Original" text while waiting for the next step
+        app.state.current_transcription = transcription
+        logger.info(f"TRANSCRIPTION_DONE: {transcription}")
+
+        # STEP 3: Translation (M2M100)
         translation = translate_text(transcription, src_lang, target_lang) if src_lang != target_lang else transcription
         
+        # STEP 4: Finalize and Save
         new_entry = {
             "id": str(uuid.uuid4())[:8],
             "sender": sender,
@@ -131,7 +133,6 @@ async def process_translation(
             "timestamp": time.time()
         }
         
-        # Save to Shared History
         history = load_history()
         history.append(new_entry)
         save_history(history)
@@ -141,19 +142,20 @@ async def process_translation(
     except Exception as e:
         logger.error(f"PROCESS_ERROR: {str(e)}")
         return {"error": "failed", "details": str(e)}
-    
     finally:
-        # 2. Reset state after processing is finished (Success or Error)
+        # End Global Processing State
         app.state.is_processing = False
         app.state.current_sender = None
+        app.state.current_transcription = ""
 
 @app.get("/history")
 async def get_history():
-    """Returns history AND the current global processing status for UI sync."""
+    """Returns history and detailed real-time processing status."""
     return {
         "history": load_history(),
         "is_processing": app.state.is_processing,
-        "active_sender": app.state.current_sender
+        "active_sender": app.state.current_sender,
+        "partial_text": app.state.current_transcription # Send the transcription-in-progress
     }
 
 @app.delete("/history")

@@ -1,6 +1,6 @@
 /**
- * AI Translation Bridge - Logic v2.4
- * Features: Auto-TTS, External Play Button, Corrected Bubble Colors, Global Sync
+ * AI Translation Bridge - Logic v2.6
+ * Features: Transcription-First Display, Global Dot Sync, Adaptive Colors
  */
 
 const API_BASE = `http://${window.location.hostname}:8000`;
@@ -23,8 +23,6 @@ const getElems = () => ({
 // --- 1. TTS ENGINE ---
 function speak(text, lang, id = null) {
     if (!window.speechSynthesis || !text) return;
-    
-    // Prevent double auto-play for the same message ID
     if (id && lastPlayedId === id) return;
     if (id) lastPlayedId = id;
 
@@ -36,20 +34,37 @@ function speak(text, lang, id = null) {
 }
 
 // --- 2. GLOBAL LOADING INDICATOR (The Three Dots) ---
-function toggleGlobalLoading(show, sender = 'customer') {
+function toggleGlobalLoading(show, sender = 'customer', partialText = "") {
     const existing = document.getElementById('global-loading');
-    if (show && !existing) {
+    const ui = getElems();
+    
+    if (show) {
         const isCustomer = sender === 'customer';
+        const colorClass = isCustomer ? 'loading-customer' : 'loading-advisor';
+        
+        // If it exists, we just update the content (for transcription display)
+        if (existing) {
+            const label = existing.querySelector('.neural-label');
+            if (partialText && label) {
+                label.innerText = partialText; // Show the transcription as it arrives
+                label.classList.remove('opacity-70', 'uppercase', 'text-[8px]');
+                label.classList.add('text-[11px]', 'font-bold', 'normal-case', 'opacity-100');
+            }
+            return;
+        }
+
         const html = `
             <div id="global-loading" class="flex ${isCustomer ? 'justify-start' : 'justify-end'} mb-6 w-full animate-fade-in">
-                <div class="flex ${isCustomer ? 'flex-row' : 'flex-row-reverse'} items-center">
-                    <div class="p-3 rounded-2xl bg-white/80 backdrop-blur-sm text-orange-500 shadow-sm border border-orange-100">
-                        <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>
-                        <span class="text-[8px] ml-2 uppercase font-black tracking-widest opacity-70">Neural Processing</span>
+                <div class="flex flex-col ${isCustomer ? 'items-start' : 'items-end'} max-w-[85%]">
+                    <div class="flex ${isCustomer ? 'flex-row' : 'flex-row-reverse'} items-center">
+                        <div class="p-3 rounded-2xl bg-white/80 backdrop-blur-sm shadow-sm border ${isCustomer ? 'border-orange-100' : 'border-slate-200'} ${colorClass}">
+                            <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>
+                            <span class="neural-label text-[8px] ml-2 uppercase font-black tracking-widest opacity-70">Neural Processing</span>
+                        </div>
                     </div>
                 </div>
             </div>`;
-        getElems().messagesContainer.insertAdjacentHTML('beforeend', html);
+        ui.messagesContainer.insertAdjacentHTML('beforeend', html);
         scrollToBottom();
     } else if (!show && existing) {
         existing.remove();
@@ -65,9 +80,6 @@ async function processInput(data, isAudio) {
 
     document.getElementById('empty-state')?.remove();
     
-    // Show dots locally immediately for the sender
-    toggleGlobalLoading(true, activeRole);
-
     const formData = new FormData();
     if (isAudio) {
         formData.append('file', data, 'recording.wav');
@@ -79,21 +91,11 @@ async function processInput(data, isAudio) {
     formData.append('sender', activeRole);
 
     try {
-        const res = await fetch(`${API_BASE}/translate`, { method: 'POST', body: formData });
-        const result = await res.json();
-        
-        if (result.error) {
-            window.logToUI?.(result.error, 'ERROR');
-            toggleGlobalLoading(false);
-            return;
-        }
-
-        // The auto-play for the sender's own message is usually avoided, 
-        // but it will trigger via syncHistory for the receiver.
-        await syncHistory();
+        // We don't wait for the result here because syncHistory (the interval) 
+        // will pick up the "processing" state and transcription from the backend
+        fetch(`${API_BASE}/translate`, { method: 'POST', body: formData });
     } catch (err) {
         window.logToUI?.("Network error", "ERROR");
-        toggleGlobalLoading(false);
     }
 }
 
@@ -103,17 +105,17 @@ async function syncHistory() {
     try {
         const res = await fetch(`${API_BASE}/history`);
         const data = await res.json();
-        const history = data.history || [];
-
-        // Global Sync of loading dots
-        toggleGlobalLoading(data.is_processing, data.active_sender);
+        
+        // Sync Global Dots and Transcription Status
+        toggleGlobalLoading(data.is_processing, data.active_sender, data.partial_text);
 
         ui.statusDot.style.backgroundColor = "#10b981";
         ui.statusText.innerText = "Neural Sync Active";
 
+        const history = data.history || [];
         if (history.length > 0) document.getElementById('empty-state')?.remove();
 
-        // Handle Reset
+        // Clear UI if history was deleted on backend
         if (history.length === 0 && knownMessageIds.size > 0) {
             ui.messagesContainer.innerHTML = '';
             knownMessageIds.clear();
@@ -127,7 +129,7 @@ async function syncHistory() {
                 renderMessage(entry);
                 knownMessageIds.add(entry.id);
 
-                // AUTO-PLAY: Only if this page is NOT the sender
+                // Auto-TTS for the receiver
                 if (pageRole !== entry.sender) {
                     const ttsLang = (entry.sender === 'customer') ? 'fr' : 'en';
                     speak(entry.translated, ttsLang, entry.id);
@@ -146,12 +148,11 @@ function renderMessage(entry) {
     const isCustomer = entry.sender === 'customer';
     const ttsLang = isCustomer ? 'fr' : 'en';
 
-    // Bubble Styles
+    // Bubble Styles: Orange left border for customer, Dark Grey right border for advisor
     const bubbleClass = isCustomer 
         ? "bg-white text-slate-800 rounded-bl-none border-l-4 border-orange-500 shadow-md" 
-        : "bg-slate-900 text-white rounded-br-none shadow-lg";
+        : "bg-slate-900 text-white rounded-br-none border-r-4 border-slate-700 shadow-lg";
 
-    // Play button BELOW the bubble
     const ttsBtn = `
         <button onclick="speak('${entry.translated.replace(/'/g, "\\'")}', '${ttsLang}')" 
                 class="mt-1 flex items-center space-x-1 opacity-60 hover:opacity-100 transition-all duration-200">
@@ -182,6 +183,7 @@ function renderMessage(entry) {
             </div>
         </div>`;
 
+    // Ensure the message appears above the loading dots if they are present
     const dots = document.getElementById('global-loading');
     if (dots) {
         dots.insertAdjacentHTML('beforebegin', html);
@@ -227,7 +229,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const ui = getElems();
     
     syncHistory();
-    setInterval(syncHistory, 1500);
+    // Fast polling (1s) ensures the transcription appears quickly after speech
+    setInterval(syncHistory, 1000);
 
     if (ui.recordBtn) ui.recordBtn.onclick = handleRecordClick;
     
