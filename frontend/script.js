@@ -1,6 +1,6 @@
 /**
- * AI Translation Bridge - Logic v2.6
- * Features: Transcription-First Display, Global Dot Sync, Adaptive Colors
+ * AI Translation Bridge - Logic v2.8 (Sequential Sync)
+ * Features: Two-Phase Processing, Real-time UI Logging, Multi-tab Dot Sync
  */
 
 const API_BASE = `http://${window.location.hostname}:8000`;
@@ -33,7 +33,7 @@ function speak(text, lang, id = null) {
     window.speechSynthesis.speak(utterance);
 }
 
-// --- 2. GLOBAL LOADING INDICATOR (The Three Dots) ---
+// --- 2. GLOBAL LOADING INDICATOR ---
 function toggleGlobalLoading(show, sender = 'customer', partialText = "") {
     const existing = document.getElementById('global-loading');
     const ui = getElems();
@@ -42,11 +42,10 @@ function toggleGlobalLoading(show, sender = 'customer', partialText = "") {
         const isCustomer = sender === 'customer';
         const colorClass = isCustomer ? 'loading-customer' : 'loading-advisor';
         
-        // If it exists, we just update the content (for transcription display)
         if (existing) {
             const label = existing.querySelector('.neural-label');
-            if (partialText && label) {
-                label.innerText = partialText; // Show the transcription as it arrives
+            if (partialText && label && label.innerText !== partialText) {
+                label.innerText = partialText;
                 label.classList.remove('opacity-70', 'uppercase', 'text-[8px]');
                 label.classList.add('text-[11px]', 'font-bold', 'normal-case', 'opacity-100');
             }
@@ -71,31 +70,62 @@ function toggleGlobalLoading(show, sender = 'customer', partialText = "") {
     }
 }
 
-// --- 3. INPUT PROCESSING ---
+// --- 3. SEQUENTIAL INPUT PROCESSING ---
 async function processInput(data, isAudio) {
     const ui = getElems();
-    const urlParams = new URLSearchParams(window.location.search);
-    const activeRole = urlParams.get('role') || ui.userRoleSelect.value;
+    const activeRole = new URLSearchParams(window.location.search).get('role') || ui.userRoleSelect.value;
     const targetLang = (activeRole === 'customer') ? 'fr' : 'en';
 
     document.getElementById('empty-state')?.remove();
-    
-    const formData = new FormData();
-    if (isAudio) {
-        formData.append('file', data, 'recording.wav');
-    } else {
-        formData.append('text', data);
-    }
-    
-    formData.append('target_lang', targetLang);
-    formData.append('sender', activeRole);
+    let textToTranslate = "";
 
     try {
-        // We don't wait for the result here because syncHistory (the interval) 
-        // will pick up the "processing" state and transcription from the backend
-        fetch(`${API_BASE}/translate`, { method: 'POST', body: formData });
+        if (isAudio) {
+            window.logToUI("Phase 1: Uploading Audio for Transcription...", "INFO");
+            
+            const formData = new FormData();
+            formData.append('file', data);
+            formData.append('sender', activeRole);
+
+            const transcibeRes = await fetch(`${API_BASE}/transcribe`, { 
+                method: 'POST', 
+                body: formData 
+            });
+            const transResult = await transcibeRes.json();
+            
+            if (transResult.error) throw new Error(transResult.error);
+            
+            textToTranslate = transResult.transcription;
+            window.logToUI(`Transcribed: "${textToTranslate}"`, "SUCCESS");
+        } else {
+            textToTranslate = data;
+        }
+
+        if (!textToTranslate) return;
+
+        window.logToUI("Phase 2: Requesting Translation...", "INFO");
+        
+        const translateData = new FormData();
+        translateData.append('text', textToTranslate);
+        translateData.append('target_lang', targetLang);
+        translateData.append('sender', activeRole);
+
+        const translateRes = await fetch(`${API_BASE}/translate_only`, { 
+            method: 'POST', 
+            body: translateData 
+        });
+        const finalResult = await translateRes.json();
+        
+        if (finalResult.error) throw new Error(finalResult.error);
+        
+        window.logToUI(`Translated successfully.`, "SUCCESS");
+        
+        // Final sync call to clean up dots and show message immediately
+        syncHistory();
+
     } catch (err) {
-        window.logToUI?.("Network error", "ERROR");
+        window.logToUI(`Process Error: ${err.message}`, "ERROR");
+        console.error(err);
     }
 }
 
@@ -106,7 +136,12 @@ async function syncHistory() {
         const res = await fetch(`${API_BASE}/history`);
         const data = await res.json();
         
-        // Sync Global Dots and Transcription Status
+        // DEBUG: Logging backend state to the UI console
+        if (data.is_processing) {
+            console.log(`Sync Polling: Processing active for ${data.active_sender}`);
+        }
+
+        // Global Sync of dots and text labels
         toggleGlobalLoading(data.is_processing, data.active_sender, data.partial_text);
 
         ui.statusDot.style.backgroundColor = "#10b981";
@@ -115,21 +150,19 @@ async function syncHistory() {
         const history = data.history || [];
         if (history.length > 0) document.getElementById('empty-state')?.remove();
 
-        // Clear UI if history was deleted on backend
+        // Remote Clear
         if (history.length === 0 && knownMessageIds.size > 0) {
             ui.messagesContainer.innerHTML = '';
             knownMessageIds.clear();
         }
 
-        const urlParams = new URLSearchParams(window.location.search);
-        const pageRole = urlParams.get('role') || ui.userRoleSelect.value;
+        const pageRole = new URLSearchParams(window.location.search).get('role') || ui.userRoleSelect.value;
 
         history.forEach(entry => {
             if (!knownMessageIds.has(entry.id)) {
                 renderMessage(entry);
                 knownMessageIds.add(entry.id);
 
-                // Auto-TTS for the receiver
                 if (pageRole !== entry.sender) {
                     const ttsLang = (entry.sender === 'customer') ? 'fr' : 'en';
                     speak(entry.translated, ttsLang, entry.id);
@@ -148,22 +181,9 @@ function renderMessage(entry) {
     const isCustomer = entry.sender === 'customer';
     const ttsLang = isCustomer ? 'fr' : 'en';
 
-    // Bubble Styles: Orange left border for customer, Dark Grey right border for advisor
     const bubbleClass = isCustomer 
         ? "bg-white text-slate-800 rounded-bl-none border-l-4 border-orange-500 shadow-md" 
         : "bg-slate-900 text-white rounded-br-none border-r-4 border-slate-700 shadow-lg";
-
-    const ttsBtn = `
-        <button onclick="speak('${entry.translated.replace(/'/g, "\\'")}', '${ttsLang}')" 
-                class="mt-1 flex items-center space-x-1 opacity-60 hover:opacity-100 transition-all duration-200">
-            <div class="p-1 rounded-full bg-orange-100 text-orange-600">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                </svg>
-            </div>
-            <span class="text-[8px] font-bold uppercase tracking-tighter">Listen AI</span>
-        </button>
-    `;
 
     const html = `
         <div class="flex ${isCustomer ? 'justify-start' : 'justify-end'} mb-6 w-full animate-fade-in">
@@ -178,18 +198,22 @@ function renderMessage(entry) {
                     </div>
                 </div>
                 <div class="${isCustomer ? 'ml-10' : 'mr-10'}">
-                    ${ttsBtn}
+                    <button onclick="speak('${entry.translated.replace(/'/g, "\\'")}', '${ttsLang}')" 
+                            class="mt-1 flex items-center space-x-1 opacity-60 hover:opacity-100 transition-all duration-200">
+                        <div class="p-1 rounded-full bg-orange-100 text-orange-600">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                            </svg>
+                        </div>
+                        <span class="text-[8px] font-bold uppercase tracking-tighter">Listen AI</span>
+                    </button>
                 </div>
             </div>
         </div>`;
 
-    // Ensure the message appears above the loading dots if they are present
     const dots = document.getElementById('global-loading');
-    if (dots) {
-        dots.insertAdjacentHTML('beforebegin', html);
-    } else {
-        ui.messagesContainer.insertAdjacentHTML('beforeend', html);
-    }
+    if (dots) dots.insertAdjacentHTML('beforebegin', html);
+    else ui.messagesContainer.insertAdjacentHTML('beforeend', html);
     
     scrollToBottom();
 }
@@ -219,8 +243,9 @@ async function handleRecordClick() {
         };
         mediaRecorder.start();
         ui.recordBtn.classList.add('rec-pulse');
+        window.logToUI("Recording started...", "WARN");
     } catch (err) {
-        window.logToUI?.("Mic access error", "ERROR");
+        window.logToUI("Mic access denied.", "ERROR");
     }
 }
 
@@ -229,14 +254,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const ui = getElems();
     
     syncHistory();
-    // Fast polling (1s) ensures the transcription appears quickly after speech
-    setInterval(syncHistory, 1000);
+    setInterval(syncHistory, 800); // Slightly faster polling for tighter sync
 
     if (ui.recordBtn) ui.recordBtn.onclick = handleRecordClick;
     
     if (ui.resetBtn) ui.resetBtn.onclick = async () => {
         if (confirm("Reset conversation?")) {
             await fetch(`${API_BASE}/history`, { method: 'DELETE' });
+            window.logToUI("History cleared.", "INFO");
             syncHistory();
         }
     };
