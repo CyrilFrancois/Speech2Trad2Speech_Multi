@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  # --- AI Engine (FastAPI) ---
+  backend:
+    build: 
+      context: ./backend
+    container_name: bridge_backend
+    volumes:
+      - ./backend/temp_audio:/app/temp_audio
+      # Optional: Map a local folder to cache HuggingFace models
+      - ./model_cache:/root/.cache/huggingface 
+    ports:
+      - "8000:8000"
+    restart: always
+    networks:
+      - ml_network
+
+  # --- Presentation Layer (Nginx) ---
+  frontend:
+    image: nginx:alpine
+    container_name: bridge_frontend
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: always
+    networks:
+      - ml_network
+
+networks:
+  ml_network:
+    driver: bridge
