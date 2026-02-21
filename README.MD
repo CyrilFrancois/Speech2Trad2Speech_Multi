@@ -7,12 +7,6 @@ Speech2Translate is a high-performance translation bridge designed for real-time
   <img src="frontend/rsc/screenshot.png" alt="Speech2Translate UI Screenshot" width="800">
 </p>
 
-<p align="center">
-  <video src="frontend/rsc/demo.mp4" width="800" controls autoplay loop muted>
-    Your browser does not support the video tag.
-  </video>
-</p>
-
 ---
 
 ## Showcase Scope & Experience
@@ -48,4 +42,7 @@ The system is orchestrated via Docker to ensure environment parity between devel
 ## Getting Started
 1.  **Environment Setup:** Ensure your `.env` is configured for your local hardware (CPU/GPU).
 2.  **Deployment:** `docker-compose up --build`
-3.  **Demonstration:** Access the local dashboard at `http://localhost`.
+3.  **Demonstration:** Access the local dashboard at `http://localhost/index.html`.
+
+Customer : http://localhost/?role=customer
+Advisor : http://localhost/?role=advisor

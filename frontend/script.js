@@ -1,19 +1,142 @@
-let mediaRecorder;
+/**
+ * CRITICAL DEBUG: If the script is loaded, it will 
+ * immediately inject a red banner at the top of the page.
+ */
+(function() {
+    const debugBanner = document.createElement('div');
+    debugBanner.id = 'js-debug-banner';
+    debugBanner.style = "position:fixed;top:0;left:0;width:100%;background:red;color:white;text-align:center;z-index:9999;font-size:12px;padding:2px;";
+    debugBanner.innerText = "JS STATUS: ACTIVE (IF YOU SEE THIS, SCRIPT IS LOADED)";
+    document.documentElement.appendChild(debugBanner);
+    console.log("!!! SCRIPT.JS IS ALIVE !!!");
+})();
+
+// --- 1. CONFIGURATION & STATE ---
+const API_BASE = `http://${window.location.hostname}:8000`;
+let mediaRecorder = null;
 let audioChunks = [];
+const knownMessageIds = new Set();
 
-// DOM Elements
-const recordBtn = document.getElementById('recordBtn');
-const textInput = document.getElementById('textInput');
-const messagesContainer = document.getElementById('messages-container');
-const userRole = document.getElementById('userRole');
-const resetBtn = document.getElementById('resetBtn');
+// --- 2. SELECTORS ---
+const getElems = () => ({
+    recordBtn: document.getElementById('recordBtn'),
+    textInput: document.getElementById('textInput'),
+    messagesContainer: document.getElementById('messages-container'),
+    userRoleSelect: document.getElementById('userRole'),
+    resetBtn: document.getElementById('resetBtn'),
+    chatWindow: document.getElementById('chat-window'),
+    statusDot: document.getElementById('status-dot'),
+    statusText: document.getElementById('status-text')
+});
 
-// --- 1. Audio Recording Logic ---
+// --- 3. SYNC LOGIC ---
+async function syncHistory() {
+    const ui = getElems();
+    try {
+        const res = await fetch(`${API_BASE}/history`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        
+        const data = await res.json();
+        const history = data.history || [];
 
-recordBtn.onclick = async () => {
+        // Update Connection Status UI
+        if (ui.statusDot) ui.statusDot.style.backgroundColor = "#22c55e";
+        if (ui.statusText) ui.statusText.innerText = "Neural Sync Active";
+
+        // Detect Global Reset
+        if (history.length === 0 && knownMessageIds.size > 0) {
+            ui.messagesContainer.innerHTML = '';
+            knownMessageIds.clear();
+        }
+
+        // Render New Messages
+        history.forEach(entry => {
+            if (!knownMessageIds.has(entry.id)) {
+                renderMessage(entry);
+                knownMessageIds.add(entry.id);
+            }
+        });
+    } catch (err) {
+        console.warn("[SYNC ERROR]", err.message);
+        if (ui.statusDot) ui.statusDot.style.backgroundColor = "#ef4444";
+        if (ui.statusText) ui.statusText.innerText = "Link Offline";
+    }
+}
+
+// --- 4. INPUT HANDLING ---
+async function processInput(data, isAudio) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const pageRole = urlParams.get('role');
+    const ui = getElems();
+    
+    const activeRole = pageRole || (ui.userRoleSelect ? ui.userRoleSelect.value : "customer");
+    const targetLang = (activeRole === 'customer') ? 'fr' : 'en';
+
+    const formData = new FormData();
+    if (isAudio) {
+        formData.append('file', data, 'recording.wav');
+    } else {
+        formData.append('text', data);
+    }
+    formData.append('target_lang', targetLang);
+    formData.append('sender', activeRole);
+
+    try {
+        await fetch(`${API_BASE}/translate`, { method: 'POST', body: formData });
+        // Immediate sync after sending
+        await syncHistory();
+    } catch (err) {
+        console.error("[POST ERROR]", err);
+    }
+}
+
+// --- 5. UI RENDERING ---
+function renderMessage(entry) {
+    const ui = getElems();
+    if (!ui.messagesContainer) return;
+
+    // Remove empty state message
+    const empty = document.getElementById('empty-state');
+    if (empty) empty.remove();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const pageRole = urlParams.get('role');
+    const isCustomer = entry.sender === 'customer';
+
+    // Content logic: show translation if viewing from the opposite role
+    let content = (pageRole && pageRole !== entry.sender) ? entry.translated : entry.original;
+    
+    // If Admin/Hub view (no role in URL), show both
+    if (!pageRole) {
+        content = `<small style="opacity:0.5;display:block;">${entry.original}</small><b>${entry.translated}</b>`;
+    }
+
+    const bubbleClass = isCustomer 
+        ? "bg-white text-slate-800 rounded-bl-none shadow-sm ring-1 ring-slate-200/50" 
+        : "bg-[#171e27] text-white rounded-br-none shadow-md";
+
+    const html = `
+        <div class="flex ${isCustomer ? 'justify-start' : 'justify-end'} mb-4 w-full animate-fade-in">
+            <div class="flex ${isCustomer ? 'flex-row' : 'flex-row-reverse'} max-w-[85%] items-end">
+                <div class="w-7 h-7 rounded-lg ${isCustomer ? 'bg-slate-300' : 'bg-[#FF7900]'} flex-shrink-0 flex items-center justify-center text-[10px] font-black text-white mx-2 mb-1 shadow-sm">
+                    ${isCustomer ? 'C' : 'A'}
+                </div>
+                <div class="p-3 md:p-4 rounded-2xl ${bubbleClass}">
+                    <p class="text-sm leading-relaxed">${content}</p>
+                </div>
+            </div>
+        </div>`;
+
+    ui.messagesContainer.insertAdjacentHTML('beforeend', html);
+    if (ui.chatWindow) ui.chatWindow.scrollTop = ui.chatWindow.scrollHeight;
+}
+
+// --- 6. AUDIO HANDLERS ---
+async function handleRecordClick() {
+    const ui = getElems();
     if (mediaRecorder && mediaRecorder.state === "recording") {
         mediaRecorder.stop();
-        recordBtn.classList.remove('rec-pulse', 'bg-red-600');
+        ui.recordBtn.classList.remove('rec-pulse');
         return;
     }
 
@@ -21,166 +144,51 @@ recordBtn.onclick = async () => {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaRecorder = new MediaRecorder(stream);
         audioChunks = [];
-
-        mediaRecorder.ondataavailable = (event) => audioChunks.push(event.data);
-        mediaRecorder.onstop = async () => {
-            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-            processInput(audioBlob, true);
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.onstop = () => {
+            const blob = new Blob(audioChunks, { type: 'audio/wav' });
+            processInput(blob, true);
         };
-
         mediaRecorder.start();
-        recordBtn.classList.add('rec-pulse', 'bg-red-600');
+        ui.recordBtn.classList.add('rec-pulse');
     } catch (err) {
-        alert("Please allow microphone access to use speech-to-speech.");
+        alert("Microphone error: " + err.message);
     }
-};
-
-// --- 2. Text Input Logic ---
-
-textInput.onkeypress = (e) => {
-    if (e.key === 'Enter' && textInput.value.trim() !== "") {
-        processInput(textInput.value, false);
-        textInput.value = "";
-    }
-};
-
-// --- 3. UI Message Handling ---
-
-function createMessageBubble(role) {
-    const isCustomer = role === 'customer';
-    const bubbleId = 'msg-' + Date.now();
-    
-    const html = `
-        <div class="flex ${isCustomer ? 'justify-start' : 'justify-end'} animate-fade-in mb-4">
-            <div class="flex ${isCustomer ? 'flex-row' : 'flex-row-reverse'} max-w-[80%] items-end space-x-2">
-                <div class="w-8 h-8 rounded-full ${isCustomer ? 'bg-gray-400' : 'bg-orange-600'} flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-white uppercase">
-                    ${isCustomer ? 'C' : 'A'}
-                </div>
-                
-                <div class="space-y-1">
-                    <div id="${bubbleId}-box" class="p-4 shadow-sm ${isCustomer ? 'bg-white text-gray-800' : 'bg-orange-500 text-white'} rounded-2xl relative">
-                        <div id="${bubbleId}-loader" class="flex space-x-1 items-center py-1">
-                            <div class="typing-dot bg-current opacity-60"></div>
-                            <div class="typing-dot bg-current opacity-60"></div>
-                            <div class="typing-dot bg-current opacity-60"></div>
-                        </div>
-                        
-                        <p id="${bubbleId}-transcription" class="text-xs opacity-70 italic hidden border-b border-white/20 pb-1 mb-1"></p>
-                        
-                        <p id="${bubbleId}-translation" class="text-md font-medium hidden"></p>
-                    </div>
-                    
-                    <button id="${bubbleId}-play" class="hidden text-[10px] flex items-center space-x-1 uppercase font-bold text-orange-600 hover:opacity-70 transition-opacity">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
-                        </svg>
-                        <span>Listen</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-
-    messagesContainer.insertAdjacentHTML('beforeend', html);
-    const chatWindow = document.getElementById('chat-window') || messagesContainer.parentElement;
-    chatWindow.scrollTo({ top: chatWindow.scrollHeight, behavior: 'smooth' });
-    
-    return bubbleId;
 }
 
-// --- 4. Main Processing (Streaming Consumer) ---
-
-async function processInput(data, isAudio) {
-    const role = userRole.value;
-    const targetLang = role === 'customer' ? 'fr' : 'en'; 
-    const bubbleId = createMessageBubble(role);
-
-    const formData = new FormData();
-    if (isAudio) {
-        formData.append('file', data, 'input.wav');
-    } else {
-        formData.append('text', data); 
+async function handleResetClick() {
+    if (confirm("Clear all history?")) {
+        try {
+            await fetch(`${API_BASE}/history`, { method: 'DELETE' });
+            syncHistory();
+        } catch (err) { console.error(err); }
     }
-    formData.append('target_lang', targetLang);
+}
 
-    try {
-        const response = await fetch('http://localhost:8000/translate', {
-            method: 'POST',
-            body: formData
-        });
+// --- 7. INIT ---
+document.addEventListener('DOMContentLoaded', () => {
+    const ui = getElems();
+    const urlParams = new URLSearchParams(window.location.search);
+    const pageRole = urlParams.get('role');
 
-        if (!response.body) throw new Error("ReadableStream not supported.");
+    if (pageRole && ui.userRoleSelect) {
+        ui.userRoleSelect.value = pageRole;
+        ui.userRoleSelect.disabled = true;
+    }
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
+    // Polling
+    syncHistory();
+    setInterval(syncHistory, 1500);
 
-        // Process the stream line by line
-        while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-
-            const chunk = decoder.decode(value, { stream: true });
-            
-            // The backend sends NDJSON (line-separated JSON)
-            const lines = chunk.split('\n');
-            
-            for (const line of lines) {
-                if (!line.trim()) continue;
-                
-                const result = JSON.parse(line);
-
-                if (result.type === 'transcription') {
-                    // Update Transcription UI (The "Pop")
-                    const transNode = document.getElementById(`${bubbleId}-transcription`);
-                    transNode.innerText = result.text;
-                    transNode.classList.remove('hidden');
-                    // Loader remains visible!
-                } 
-                
-                if (result.type === 'translation') {
-                    // Final step: Hide loader and show translation
-                    document.getElementById(`${bubbleId}-loader`).classList.add('hidden');
-                    
-                    const translNode = document.getElementById(`${bubbleId}-translation`);
-                    translNode.innerText = result.text;
-                    translNode.classList.remove('hidden');
-
-                    // Audio Playback
-                    const playBtn = document.getElementById(`${bubbleId}-play`);
-                    playBtn.classList.remove('hidden');
-                    playBtn.onclick = () => speakText(result.text, targetLang);
-                    
-                    speakText(result.text, targetLang);
-                }
-
-                if (result.type === 'error') {
-                   throw new Error(result.text);
-                }
+    // Bindings
+    if (ui.recordBtn) ui.recordBtn.onclick = handleRecordClick;
+    if (ui.resetBtn) ui.resetBtn.onclick = handleResetClick;
+    if (ui.textInput) {
+        ui.textInput.onkeypress = (e) => {
+            if (e.key === 'Enter' && ui.textInput.value.trim() !== "") {
+                processInput(ui.textInput.value, false);
+                ui.textInput.value = "";
             }
-        }
-
-    } catch (error) {
-        console.error(error);
-        const loader = document.getElementById(`${bubbleId}-loader`);
-        if (loader) loader.innerHTML = `<span class="text-red-500 text-xs">Error: ${error.message}</span>`;
+        };
     }
-}
-
-// --- 5. Text-to-Speech (TTS) ---
-
-function speakText(text, langCode) {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    const langMap = { 'fr': 'fr-FR', 'en': 'en-US' };
-    utterance.lang = langMap[langCode] || 'en-US';
-    utterance.rate = 1.0;
-    window.speechSynthesis.speak(utterance);
-}
-
-// --- 6. Reset UI ---
-
-resetBtn.onclick = () => {
-    if (confirm("Reset conversation?")) {
-        messagesContainer.innerHTML = '';
-    }
-};
+});

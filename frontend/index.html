@@ -3,147 +3,167 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multilingual Support Bridge</title>
+    <title>AI Translation Bridge | Neural Sync</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Helvetica:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    
     <style>
         body { 
-            font-family: 'Helvetica', Arial, sans-serif; 
-            /* Added your abstract background image */
-            background-image: url('./rsc/background.png');
-            background-size: cover;
+            font-family: 'Inter', sans-serif; 
+            /* Fallback to slate if image is missing */
+            background-color: #f8fafc;
+            background-image: url('./rsc/background.png'); 
+            background-size: cover; 
             background-position: center;
             background-attachment: fixed;
-            background-repeat: no-repeat;
-            background-color: #f4f4f4; /* Fallback color */
         }
         
         .orange-brand { color: #FF7900; }
         .bg-orange-brand { background-color: #FF7900; }
         .border-orange-brand { border-color: #FF7900; }
         
-        /* Chat Bubble Styles */
-        .bubble-customer { 
-            background: rgba(255, 255, 255, 0.9); 
-            backdrop-filter: blur(4px);
-            border-bottom-left-radius: 2px; 
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        #chat-window { 
+            height: calc(100vh - 280px); 
+            scrollbar-width: thin;
+            scrollbar-color: #cbd5e1 transparent;
         }
-        
-        /* Deep charcoal advisor bubble */
-        .bubble-advisor { 
-            background: #171e27; 
-            color: white; 
-            border-bottom-right-radius: 2px; 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-        
-        /* Better distinction between transcript and translation */
-        #messages-container p.hidden { display: none; }
 
-        /* A subtle fade-in when the transcript and translation appear */
-        #messages-container p {
-            animation: fadeIn 0.3s ease-in-out;
+        header, footer {
+            backdrop-filter: blur(16px);
+            background-color: rgba(255, 255, 255, 0.85) !important;
+        }
+
+        .nav-link-active {
+            background-color: #FF7900 !important;
+            color: white !important;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(5px); }
+            from { opacity: 0; transform: translateY(12px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
-        /* Ensure the transcription is readable but distinct on both backgrounds */
-        [id$="-transcription"] {
-            border-bottom: 1px solid rgba(128, 128, 128, 0.2);
-            margin-bottom: 0.5rem;
-            padding-bottom: 0.25rem;
-            display: block;
+        .rec-pulse { 
+            animation: pulse 1.5s infinite; 
+            background-color: #ef4444 !important; 
+        }
+        
+        @keyframes pulse { 
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); } 
+            70% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); } 
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } 
         }
 
-        /* Typing/Processing Dots */
-        .typing-dot { width: 6px; height: 6px; background: #94a3b8; border-radius: 50%; animation: blink 1.4s infinite both; }
-        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes blink { 0%, 100% { opacity: 0.2; } 20% { opacity: 1; } }
-
-        /* Recording Pulse */
-        .rec-pulse { animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 121, 0, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(255, 121, 0, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 121, 0, 0); } }
-        
-        #chat-window { height: calc(100vh - 240px); }
-
-        /* Smooth glass effect for header/footer */
-        header, footer {
-            backdrop-filter: blur(10px);
-            background-color: rgba(255, 255, 255, 0.85) !important;
+        #debug-log {
+            position: fixed;
+            bottom: 120px;
+            right: 20px;
+            width: 300px;
+            max-height: 200px;
+            background: rgba(0,0,0,0.9);
+            color: #00ff00;
+            font-family: monospace;
+            font-size: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+            border: 1px solid #333;
         }
     </style>
 </head>
-<body class="flex flex-col">
+<body class="flex flex-col h-screen overflow-hidden">
 
-    <header class="border-b-4 border-orange-brand p-4 shadow-sm sticky top-0 z-10">
+    <div id="debug-log"></div>
+
+    <header class="border-b-4 border-orange-brand p-4 shadow-md sticky top-0 z-10">
         <div class="max-w-4xl mx-auto flex justify-between items-center">
             <div class="flex items-center space-x-4">
-                <div class="w-10 h-10 bg-[#171e27] flex items-center justify-center text-white font-bold text-xs">BRIDGE</div>
+                <div class="w-10 h-10 bg-[#171e27] rounded-lg flex items-center justify-center text-white font-black text-[10px] tracking-tighter shadow-lg">BRIDGE</div>
                 <div>
-                    <h1 class="text-lg font-bold">AI Translation Bridge</h1>
-                    <p class="text-xs text-gray-500 uppercase tracking-widest">Customer Service Demo</p>
+                    <h1 class="text-lg font-extrabold tracking-tight">AI Translation <span class="orange-brand">Bridge</span></h1>
+                    <nav class="flex space-x-1 mt-1">
+                        <a href="index.html" id="nav-main" class="text-[9px] font-bold px-3 py-1 bg-white/50 rounded-full hover:bg-orange-100 transition-all uppercase tracking-wider text-slate-600 border border-slate-200">Main Hub</a>
+                        <a href="index.html?role=customer" id="nav-customer" class="text-[9px] font-bold px-3 py-1 bg-white/50 rounded-full hover:bg-orange-100 transition-all uppercase tracking-wider text-slate-600 border border-slate-200">Customer (EN)</a>
+                        <a href="index.html?role=advisor" id="nav-advisor" class="text-[9px] font-bold px-3 py-1 bg-white/50 rounded-full hover:bg-orange-100 transition-all uppercase tracking-wider text-slate-600 border border-slate-200">Advisor (FR)</a>
+                    </nav>
                 </div>
             </div>
-            <div class="flex items-center space-x-2 text-sm text-green-600 font-medium">
-                <span class="w-2 h-2 bg-green-500 rounded-full"></span>
-                <span>Live Engine Connected</span>
+            <div id="status-indicator" class="flex items-center space-x-2 text-slate-400">
+                <span id="status-dot" class="w-2 h-2 bg-slate-400 rounded-full transition-colors duration-500"></span>
+                <span id="status-text" class="text-[10px] font-black uppercase tracking-widest">System Offline</span>
             </div>
         </div>
     </header>
 
-    <main id="chat-window" class="max-w-4xl w-full mx-auto p-4 overflow-y-auto space-y-6">
-        <div id="messages-container" class="space-y-6">
-            </div>
-
-        <div id="global-loader" class="hidden flex items-start space-x-3">
-            <div class="w-8 h-8 rounded-full bg-gray-300 flex-shrink-0"></div>
-            <div class="p-3 rounded-2xl bg-white/80 backdrop-blur flex space-x-1 items-center shadow-sm">
-                <div class="typing-dot"></div>
-                <div class="typing-dot"></div>
-                <div class="typing-dot"></div>
-                <span class="text-xs text-gray-500 ml-2 italic">AI Processing...</span>
-            </div>
+    <main id="chat-window" class="max-w-4xl w-full mx-auto p-4 md:p-6 overflow-y-auto">
+        <div id="messages-container" class="space-y-4 pb-10">
+            <div id="empty-state" class="text-center py-10 opacity-40 italic text-sm font-semibold text-slate-700 bg-white/30 backdrop-blur-sm rounded-3xl border border-white/50">
+                Waiting for conversation...
+             </div>
         </div>
     </main>
 
-    <footer class="fixed bottom-0 w-full border-t border-gray-200 p-4">
+    <footer class="mt-auto border-t border-slate-200 p-6 shadow-[0_-4px_10px_rgba(0,0,0,0.1)]">
         <div class="max-w-4xl mx-auto">
-            <div class="flex items-center space-x-4">
-                <button id="resetBtn" class="p-2 text-gray-400 hover:text-red-500 transition-colors" title="Reset Conversation">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div class="flex items-center space-x-3">
+                <button id="resetBtn" class="p-3.5 text-slate-400 hover:text-red-500 transition-all bg-white/80 rounded-2xl border border-slate-200 shadow-sm group" title="Reset History">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 group-active:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                 </button>
 
                 <div class="flex-grow relative">
-                    <input id="textInput" type="text" placeholder="Type a message..." class="w-full p-4 pr-12 bg-white/90 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-brand outline-none transition-all shadow-inner">
+                    <input id="textInput" type="text" placeholder="Type message..." class="w-full p-4 pr-12 bg-white/90 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-500/10 focus:border-orange-brand outline-none transition-all shadow-sm font-medium">
                 </div>
 
-                <button id="recordBtn" class="w-14 h-14 bg-orange-brand rounded-full flex items-center justify-center text-white shadow-lg transition-transform active:scale-95">
-                    <svg id="micIcon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <button id="recordBtn" class="w-14 h-14 bg-orange-brand rounded-2xl flex items-center justify-center text-white shadow-lg shadow-orange-500/40 transition-all active:scale-90 hover:brightness-110">
+                    <svg id="micIcon" xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                     </svg>
                 </button>
             </div>
             
-            <div class="flex justify-between mt-2 px-2">
-                <p class="text-[10px] text-gray-400 uppercase font-bold tracking-tighter">Powered by Faster-Whisper & M2M100</p>
-                <div class="flex items-center space-x-4">
-                    <label class="text-xs font-bold uppercase">Role:</label>
-                    <select id="userRole" class="text-xs bg-transparent font-bold text-orange-brand outline-none cursor-pointer">
-                        <option value="customer">Customer</option>
-                        <option value="advisor">Advisor</option>
+            <div class="flex justify-between mt-4 px-1">
+                <div class="flex items-center space-x-2">
+                    <button onclick="toggleDebug()" class="px-2 py-0.5 bg-white/50 border border-slate-200 rounded text-[9px] font-bold text-slate-500 uppercase tracking-tighter hover:bg-orange-500 hover:text-white transition-colors">Toggle Logs</button>
+                    <span class="px-2 py-0.5 bg-white/50 border border-slate-200 rounded text-[9px] font-bold text-slate-500 uppercase tracking-tighter">Bridge Neural v2.0</span>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <label class="text-[9px] font-extrabold uppercase text-slate-500 tracking-widest">Active Role:</label>
+                    <select id="userRole" class="text-xs bg-transparent font-black text-orange-brand outline-none cursor-pointer border-b-2 border-orange-200 hover:border-orange-brand transition-colors">
+                        <option value="customer">Customer (EN)</option>
+                        <option value="advisor">Advisor (FR)</option>
                     </select>
                 </div>
             </div>
         </div>
     </footer>
 
-    <script src="script.js"></script>
+    <script>
+        // Highlighting active navigation
+        const params = new URLSearchParams(window.location.search);
+        const currentRole = params.get('role') || 'main';
+        const activeNav = document.getElementById('nav-' + currentRole);
+        if (activeNav) activeNav.classList.add('nav-link-active');
+
+        // Toggle terminal
+        function toggleDebug() {
+            const consoleEl = document.getElementById('debug-log');
+            consoleEl.style.display = (consoleEl.style.display === 'none' || consoleEl.style.display === '') ? 'block' : 'none';
+        }
+
+        console.log("HTML Structure Loaded. Waiting for script.js...");
+    </script>
+
+    <script>
+        document.write('<script src="script.js?v=' + Date.now() + '"><\/script>');
+    </script>
 </body>
 </html>
