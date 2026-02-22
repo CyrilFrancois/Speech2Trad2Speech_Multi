@@ -29,11 +29,22 @@ Unlike standard translation apps that wait for the entire process to finish befo
 ## Project Architecture
 The system is orchestrated via Docker to ensure environment parity between development and production.
 
-### **File Structure**
-* **`main.py`** (FastAPI): Threaded handlers for Transcription and Translation; global state management for sync.
-* **`index.html`** (Tailwind CSS): Responsive UI with integrated neural processing indicators and real-time debug console.
-* **`script.js`** (Vanilla JS): Sequential fetch logic and Web MediaRecorder implementation.
-* **`conversation_history.json`** (Persistence): JSON-based store for cross-session continuity.
+### **File Structure Description**
+
+* **`README.md`**
+* **`.env`**
+* **`docker-compose.yml`**
+* **`/backend`**
+    * `main.py`
+    * `requirements.txt`
+    * `Dockerfile`
+* **`/frontend`**
+    * `index.html`
+    * `script.js`
+    * `Dockerfile`
+* **`/rsc`**
+    * `screenshot.png`
+    * `background.png`
 
 ---
 
@@ -48,12 +59,3 @@ The system is orchestrated via Docker to ensure environment parity between devel
     * **Advisor View:** `http://localhost/index.html?role=advisor` (FR Input)
 
 4.  **Monitoring:** Click the **"View Logs"** button in the footer to watch the Phase 1/Phase 2 handshake in real-time.
-
-
-- I'ld like to have written on top of the conv' the title Customer or Advisor dedpending on the page and nothing in the main hub.
-
-- I'ld like for the button go change page at the top to be hidden but only revealed when hoovering it.
-
-- I'ld like for the customer to bubble to be reversed so on the customer pages, its bubble are show on the left side, which is a common standard now.
-
-- I'ld like to add AI to suggest what to asnwer: a side right block where the AI (GPT) will analyse the conv and offer suggestion on what to answer: differently for Customer and Advisor, nothing in the main. But for both I want the area and when a message is transcrypted (before it is translated) it is send a to the back wich gonna just pass the conv plus a context specifif to customer of advisor (I'll write them later, but now I'll want a filler).
