@@ -21,7 +21,14 @@
         .bg-orange-brand { background-color: #FF7900; }
         .border-orange-brand { border-color: #FF7900; }
         
-        /* 1. Stealth Navigation Logic */
+        /* Forces "Transcribing..." and dots to match the role color */
+        .justify-start .typing-dot, 
+        .justify-start .italic { color: #FF7900 !important; opacity: 1; }
+        
+        .justify-end .typing-dot, 
+        .justify-end .italic { color: #475569 !important; opacity: 1; }
+
+        /* Stealth Navigation Logic */
         #nav-container { 
             transition: all 0.3s ease;
             opacity: 0;
@@ -50,7 +57,6 @@
         @keyframes wave { 0%, 60%, 100% { transform: initial; } 30% { transform: translateY(-5px); } }
 
         #debug-log { position: fixed; bottom: 120px; right: 20px; width: 340px; max-height: 280px; background: rgba(15, 23, 42, 0.98); color: #10b981; font-family: monospace; font-size: 11px; padding: 14px; border-radius: 16px; overflow-y: auto; z-index: 100; display: none; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.5); }
-        .log-entry { margin-bottom: 4px; line-height: 1.4; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 2px; }
     </style>
 
     <script>
@@ -62,11 +68,9 @@
             if (type === 'ERROR') color = '#f87171';
             if (type === 'WARN') color = '#fbbf24';
             if (type === 'SUCCESS') color = '#34d399';
-            
             logEl.innerHTML += `<div class="log-entry" style="color: ${color}"><span style="opacity:0.4; font-size: 9px;">[${time}]</span> <strong>${type}:</strong> ${msg}</div>`;
             logEl.scrollTop = logEl.scrollHeight;
         };
-
         function toggleDebug() {
             const el = document.getElementById('debug-log');
             el.style.display = (el.style.display === 'none' || el.style.display === '') ? 'block' : 'none';
@@ -110,12 +114,12 @@
         </main>
 
         <aside id="ai-sidebar" class="hidden w-80 flex flex-col py-4">
-            <div class="rounded-3xl p-5 border border-slate-200 bg-white/50 shadow-xl flex-grow flex flex-col">
+            <div id="ai-container" class="rounded-3xl p-5 border shadow-xl flex-grow flex flex-col backdrop-blur-sm transition-all duration-500">
                 <div class="flex items-center space-x-2 mb-6 border-b pb-3 opacity-50">
-                    <div class="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
-                    <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-500">AI Assistant</h2>
+                    <div id="ai-dot" class="w-2.5 h-2.5 rounded-full animate-pulse"></div>
+                    <h2 class="text-[10px] font-black uppercase tracking-widest">AI Assistant</h2>
                 </div>
-                <div class="space-y-4 flex-grow italic text-xs text-slate-400">
+                <div class="space-y-4 flex-grow italic text-xs opacity-70">
                     Suggestions will appear here during the conversation...
                 </div>
             </div>
@@ -160,17 +164,26 @@
         if (activeNav) activeNav.classList.add('nav-link-active');
 
         const roleSelect = document.getElementById('userRole');
-        const selectorContainer = document.getElementById('role-selector-container');
         const recordBtn = document.getElementById('recordBtn');
         const identityLabel = document.querySelector('#identity-label span');
         const aiSidebar = document.getElementById('ai-sidebar');
+        const aiContainer = document.getElementById('ai-container');
+        const aiDot = document.getElementById('ai-dot');
         
-        // Apply Role visibility logic
         if (role !== 'main') {
             roleSelect.value = role;
-            selectorContainer.style.visibility = 'hidden'; 
+            document.getElementById('role-selector-container').style.visibility = 'hidden'; 
             identityLabel.innerText = role.toUpperCase() + " MODE";
             aiSidebar.classList.remove('hidden');
+
+            // Apply light themed AI Sidebar
+            if (role === 'customer') {
+                aiContainer.classList.add('bg-orange-50/60', 'border-orange-100', 'text-orange-900');
+                aiDot.classList.add('bg-orange-500');
+            } else {
+                aiContainer.classList.add('bg-slate-100/60', 'border-slate-200', 'text-slate-900');
+                aiDot.classList.add('bg-slate-900');
+            }
         } else {
             document.getElementById('identity-label').style.display = 'none';
         }
