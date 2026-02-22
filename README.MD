@@ -59,3 +59,9 @@ The system is orchestrated via Docker to ensure environment parity between devel
     * **Advisor View:** `http://localhost/index.html?role=advisor` (FR Input)
 
 4.  **Monitoring:** Click the **"View Logs"** button in the footer to watch the Phase 1/Phase 2 handshake in real-time.
+
+
+TBD:
+- Revert the bubble when on the customer page so the customer bubble are on the right sid (standard like other message app)
+- Include a real AI to create real time advices based on the current conv' (emulating a DB with protocols or tickets)
+- Breakdown the code: its sarting to be to big, even for a demo
