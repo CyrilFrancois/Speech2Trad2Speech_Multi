@@ -132,9 +132,8 @@
                     <div id="ai-dot" class="w-2.5 h-2.5 rounded-full animate-pulse"></div>
                     <h2 class="text-[10px] font-black uppercase tracking-widest">AI Assistant</h2>
                 </div>
-                <div class="space-y-4 flex-grow italic text-xs opacity-70">
-                    Suggestions will appear here during the conversation...
-                </div>
+                <div id="ai-filler-content" class="space-y-4 flex-grow">
+                    </div>
             </div>
         </aside>
     </div>
@@ -182,6 +181,7 @@
         const aiSidebar = document.getElementById('ai-sidebar');
         const aiContainer = document.getElementById('ai-container');
         const aiDot = document.getElementById('ai-dot');
+        const aiFiller = document.getElementById('ai-filler-content');
         
         if (role !== 'main') {
             roleSelect.value = role;
@@ -192,9 +192,27 @@
             if (role === 'customer') {
                 aiContainer.classList.add('bg-orange-50/60', 'border-orange-100', 'text-orange-900');
                 aiDot.classList.add('bg-orange-500');
+                // Customer Fillers
+                aiFiller.innerHTML = `
+                    <div class="space-y-2">
+                        <p class="text-[10px] font-black uppercase opacity-40">Quick Replies</p>
+                        <button onclick="document.getElementById('textInput').value='I need help with my connection'" class="w-full text-left p-3 rounded-xl bg-white/80 border border-orange-200 text-xs font-semibold hover:border-orange-400 transition-colors cursor-pointer">"I need help with my connection"</button>
+                        <button onclick="document.getElementById('textInput').value='Thank you for the information'" class="w-full text-left p-3 rounded-xl bg-white/80 border border-orange-200 text-xs font-semibold hover:border-orange-400 transition-colors cursor-pointer">"Thank you for the information"</button>
+                    </div>
+                `;
             } else {
                 aiContainer.classList.add('bg-slate-100/60', 'border-slate-200', 'text-slate-900');
                 aiDot.classList.add('bg-slate-900');
+                // Advisor Fillers
+                aiFiller.innerHTML = `
+                    <div class="space-y-3">
+                        <div class="p-3 rounded-xl bg-slate-800 text-white shadow-sm">
+                            <p class="text-[9px] font-black uppercase text-orange-400 mb-1">RAG Analysis</p>
+                            <p class="text-[11px] leading-relaxed opacity-90">Protocol detected: Fiber-link-auth. Found resolution in ticket #2049. Suggest checking ONT power state.</p>
+                        </div>
+                        <div class="italic text-xs opacity-60">RAG identified this as a solution for a standard ticket. Here is what to do next...</div>
+                    </div>
+                `;
             }
         } else {
             document.getElementById('identity-label').style.display = 'none';
