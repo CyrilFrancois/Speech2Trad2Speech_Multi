@@ -4,7 +4,7 @@
 Speech2Translate is a high-performance translation bridge designed for real-time customer service environments. This repository serves as a **Technical Showcase** of a "Cascaded" AI pipeline, demonstrating that high-accuracy, private translation is achievable through localized models with real-time multi-device synchronization.
 
 <p align="center">
-  <img src="frontend/rsc/screenshot.png" alt="Speech2Translate UI Screenshot" width="800">
+  <img src="frontend/rsc/screenshot2.png" alt="Speech2Translate UI Screenshot" width="800">
 </p>
 
 ---
