@@ -36,5 +36,5 @@ RUN mkdir -p temp_audio && chmod 777 temp_audio
 
 EXPOSE 8000
 
-# Using --workers 1 to keep memory usage predictable on CPU for the demo
+# Using --workers 1 to keep memory usage predictable on CPU
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
