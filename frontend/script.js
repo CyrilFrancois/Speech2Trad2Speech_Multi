@@ -1,6 +1,6 @@
 /**
  * AI Translation Bridge - Logic v2.8 (Sequential Sync)
- * Features: Two-Phase Processing, Real-time UI Logging, Multi-tab Dot Sync
+ * Features: Two-Phase Processing, Real-time UI Logging, Multi-tab Dot Sync...
  */
 
 const API_BASE = `http://${window.location.hostname}:8000`;
