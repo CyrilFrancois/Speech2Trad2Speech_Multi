@@ -8,7 +8,6 @@ services:
     container_name: bridge_backend
     volumes:
       - ./backend/temp_audio:/app/temp_audio
-      # Optional: Map a local folder to cache HuggingFace models
       - ./model_cache:/root/.cache/huggingface 
     ports:
       - "8000:8000"
