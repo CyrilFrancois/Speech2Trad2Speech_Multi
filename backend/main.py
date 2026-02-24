@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from faster_whisper import WhisperModel
 from transformers import M2M100ForConditionalGeneration, M2M100Tokenizer
 
-# --- LOGGING SETUP ----
+# --- LOGGING SETUP ---
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s"
